@@ -1,0 +1,18 @@
+# Docker compose recipe for running both x11vnc and tigervncserver
+version: "3.7"
+services:
+    browser-x:
+        image: thanatisia/websocket-x:latest
+        container_name:  browser-x
+        build:
+          context: .
+          args:
+            - VNC_SERVER_PASS=[your-vnc-server-password-here]
+          dockerfile: docker/Dockerfiles/debian/[target-vnc-server].Dockerfile
+        restart: unless-stopped
+        ports:
+          ## Port Forward/Translate/Map host system port to container port
+          ## [ip-address]:[host-system-port]:[container-port]
+          - 5900:5900 # VNC Server listening port
+          - 6080:6080 # Websocket server listening port
+
