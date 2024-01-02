@@ -96,9 +96,93 @@ Base VNC + WebSocket server docker image that aims to simplify the initial setup
     + Build the image
     - Include the following 
         - in your Dockerfile
-            FROM thanatisia/browser-x:latest AS server:
+            ```
+            FROM thanatisia/websocket-x:latest AS new-image
+            ```
         - in your docker-compose
-            image: thanatisia/browser-x
+            ```yaml
+            image: thanatisia/websocket-x:latest
+            ```
+    - Multi-stage Build Example 
+        - Dockerfiles
+            - Embedding as a reference (in stage-2.Dockerfile)
+                ```
+                FROM thanatisia/websocket-x:latest AS test-container
+
+                ## Copy files
+                COPY ./test.sh /tmp/test.sh
+
+                ## Run on startup
+                RUN /bin/bash -c "/tmp/test.sh"
+                ```
+            - Building using 'docker build'
+                ```console
+                # Build Stage 1 image
+                docker build --tag thanatisia/websocket-x:latest -f stage-1.Dockerfile [context]
+
+                # Build Stage 2 image
+                docker build --tag thanatisia/websocket-x:latest -f stage-2.Dockerfile [context]
+
+                ...
+
+                # Build Stage N image
+                docker build --tag thanatisia/websocket-x:latest -f stage-N.Dockerfile [context]
+                ```
+            - Starting up container
+                ```console
+                docker run -itd --name=[container-name] thanatisia/websocket-x:latest
+                ```
+        - docker-compose
+            - Explanation
+                - The service application 'websocket-x-stage-1' is Stage 1 of the Multi-stage Build 
+                    + which will build the image 'thanatisia/websocket-x:latest' using the specified dockerfile (in this case - docker/Dockerfiles/debian/[vnc-server].Dockerfile)
+                    + The focus of the Dockerfile recipe is on installing dependencies and establishing the ENTRY POINT
+                - The service application 'websocket-x-stage-2' is Stage 2 of the Multi-stage Build, as well as any other additional stages you require when importing this framework as an image recipe
+                    - For example
+                        + websocket-x-stage-2 could be for installing additional dependencies to be ran and started after the container is built and started up
+                - The service application 'browser-x' is your main application after every previous build stages have been completed
+                    - In this service, you do not need to use the 'build' key-value and instead, call for the image directly
+                - Important Options
+                    - `tty: true` : The 'tty' key-value in docker-compose is equivalent to the '-t' option/flag in 'docker run', which basically tells docker to keep the TTY/terminal enabled even after the command has ended
+            ```yaml
+            # Docker compose recipe for running both x11vnc and tigervncserver
+            version: "3.7"
+            services:
+                websocket-x-stage-1:
+                  image: thanatisia/websocket-x:latest
+                  build:
+                    context: .
+                    args:
+                      - "VNC_SERVER_SPECS=[additional-vnc-server-specifications]"
+                      - VNC_SERVER_PASS=[your-vnc-server-password]
+                      - "FRAMEBUFFER_SCREEN_SPECS=-screen 0 1920x1080x16"
+                    dockerfile: docker/Dockerfiles/debian/[vnc-server].Dockerfile
+
+                websocket-x-stage-2:
+                  image: thanatisia/websocket-x:latest
+                  build:
+                    context: .
+                    dockerfile: docker/Dockerfiles/debian/stage-2.Dockerfile
+
+                ...
+
+                websocket-x-stage-N:
+                  image: thanatisia/websocket-x:latest
+                  build:
+                    context: .
+                    dockerfile: docker/Dockerfiles/debian/stage-N.Dockerfile
+
+                browser-x:
+                    image: thanatisia/websocket-x:latest
+                    container_name:  browser-x
+                    restart: unless-stopped
+                    tty: true
+                    ports:
+                      ## Port Forward/Translate/Map host system port to container port
+                      ## [ip-address]:[host-system-port]:[container-port]
+                      - 5900:5900 # VNC Server listening port
+                      - 6080:6080 # Websocket server listening port
+            ```
 
 ## Documentations
 

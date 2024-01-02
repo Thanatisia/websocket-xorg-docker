@@ -1,15 +1,36 @@
+#!/bin/bash
 # Makefile to build images using dockerfile and run containers
 
 ## Variables/Ingredients
-docker_dir=docker/Dockerfiles/debian/
+docker_dir=docker/Dockerfiles/debian
 Dockerfile=[vnc-server].Dockerfile
-context=.
-build_opts="--build-arg VNC_SERVER_PASS=[VNC-server-password]"
-run_opts=""
+context=. # docker container build context point
 IMAGE_NAME=thanatisia/websocket-x
 IMAGE_TAG=latest
 CONTAINER_NAME=browser-x
 processes=(websockify Xvfb [your-vnc-server])
+
+## Specifications
+declare -A specs=(
+    ["framebuffer-screens-specs"]="\"-screen 0 1920x1080x16\""
+)
+
+## Options
+build_opts=(
+    -t ${IMAGE_NAME}:${IMAGE_TAG} 
+    -f ${docker_dir}/${Dockerfile} 
+    --build-arg VNC_SERVER_SPECS='-geometry 1920x1080' 
+    --build-arg VNC_SERVER_PASS=[your-vnc-server-password] 
+    --build-arg FRAMEBUFFER_SCREEN_SPECS='-screen 0 1920x1080x16'
+) # docker image buildtime options
+run_opts="" # docker container startup options
+exec_opts="" # Container runtime executable CLI arguments and options
+
+## Commands
+cmd_build="docker build "${build_opts[@]}" ${context}"
+cmd_run="docker run -itd --name=${CONTAINER_NAME} ${run_opts} -p 5900:5900 -p 6080:6080 ${IMAGE_NAME}:${IMAGE_TAG} ${exec_opts}"
+cmd_stop="docker stop ${CONTAINER_NAME}"
+cmd_remove="docker rm ${CONTAINER_NAME}"
 
 ## Recipe/Targets
 help()
@@ -24,28 +45,51 @@ help()
 build()
 {
     ## Build docker image with Dockerfile
-    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ${build_opts} -f ${docker_dir}/${Dockerfile} ${context}
+
+    # Execute command
+    echo -e "Executing: $cmd_build"
+    docker build "${build_opts[@]}" ${context}
 }
 
 start()
 {
     ## Start docker container with image
-    docker run -itd --name=${CONTAINER_NAME} ${run_opts} -p 5900:5900 -p 6080:6080 ${IMAGE_NAME}:${IMAGE_TAG}
+
+    # Execute command
+    echo -e "Executing: $cmd_run"
+    $cmd_run
+}
+
+down()
+{
+    ## Stop a running docker container
+    echo -e "Executing: $cmd_stop"
+    $cmd_stop
 }
 
 remove()
 {
-    ## Stop docker container
-    docker stop ${CONTAINER_NAME} && docker rm ${CONTAINER_NAME}
+    ## Remove an existing docker container
+
+    # Execute command
+    echo -e "Executing: $cmd_remove"
+    $cmd_remove
+}
+
+display_docker_processes()
+{
+    : "
+    Display docker container processes
+    "
+    echo -e "Listing docker container process..."
+    docker ps
 }
 
 display_log()
 {
-    echo -e "Listing docker container process..."
-    docker ps
-
-    echo -e ""
-
+    : "
+    Display docker container log
+    "
     echo -e "Listing logs of ${CONTAINER_NAME}"
     docker logs ${CONTAINER_NAME}
 }
@@ -58,7 +102,7 @@ display_processes()
     processes=("$@")
 
     echo -e "${process[@]}"
-    echo -e "Displaying processes..."
+    echo -e "Displaying application processes..."
 
     echo -e ""
 
@@ -81,15 +125,26 @@ display_processes()
 main()
 {
     ## Stop existing container, build and run
-    remove; 
-        build && \
-        echo -e "" && \
-        start && \
-        sleep 2 && \
-        echo -e "" && \
-        display_log
-        echo -e "" && \
-        display_processes "${processes[@]}"
+    down
+    echo -e ""
+
+    remove
+    echo -e " "
+
+    build
+    echo -e " "
+
+    start
+    sleep 2
+    echo -e " "
+
+    display_docker_processes
+    echo -e ""
+    
+    display_log
+    echo -e " "
+
+    display_processes "${processes[@]}"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
